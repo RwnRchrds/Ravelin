@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using Ravelin.Core;
 using Ravelin.Uci;
 
@@ -223,7 +224,7 @@ public class UciEngineTests
         string[] divide = lines[..^1];
         Assert.Equal(20, divide.Length);
         Assert.Contains("e2e4: 600", divide);
-        Assert.Equal(8902, divide.Sum(l => long.Parse(l.Split(':')[1])));
+        Assert.Equal(8902, divide.Sum(l => long.Parse(l.Split(':')[1], CultureInfo.InvariantCulture)));
     }
 
     /// <summary>
@@ -304,7 +305,7 @@ public class UciEngineTests
         engine.Execute("go depth 4");
         engine.WaitForSearch();
 
-        string[] info = Lines(output()).Where(l => l.StartsWith("info depth")).ToArray();
+        string[] info = Lines(output()).Where(l => l.StartsWith("info depth", StringComparison.Ordinal)).ToArray();
         Assert.Equal(4, info.Length);
 
         foreach (string line in info)
@@ -407,6 +408,6 @@ public class UciEngineTests
         engine.WaitForSearch();
 
         // One bestmove per go, and the engine is left idle rather than still thinking.
-        Assert.Equal(2, Lines(output()).Count(l => l.StartsWith("bestmove ")));
+        Assert.Equal(2, Lines(output()).Count(l => l.StartsWith("bestmove ", StringComparison.Ordinal)));
     }
 }

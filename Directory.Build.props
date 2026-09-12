@@ -1,0 +1,22 @@
+<Project>
+
+  <!-- Shared settings for every project in the repository. Individual csproj files
+       carry only what is genuinely specific to them. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <!-- The build is warning-free, so treating warnings as errors costs nothing today and
+       stops the codebase drifting. EnforceCodeStyleInBuild applies the .editorconfig rules
+       that are set to warning; the rest stay as IDE suggestions. -->
+  <PropertyGroup>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Recommended</AnalysisMode>
+  </PropertyGroup>
+
+</Project>

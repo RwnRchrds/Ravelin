@@ -200,6 +200,29 @@ Claiming an actual threefold draw in a game is the GUI's job, not the engine's.
 **Slider attacks are walked ray by ray.** `Attacks.Bishop` and `Attacks.Rook` are the seam where
 magic bitboards will drop in later without any caller changing.
 
+## Code style
+
+`.editorconfig` is the source of truth, applied by IDEs, by `dotnet format`, and by the build
+itself through `EnforceCodeStyleInBuild`. CI fails on unformatted code, so style never needs
+discussing in review.
+
+```bash
+dotnet format                      # apply
+dotnet format --verify-no-changes  # what CI runs
+```
+
+Shared build settings live in `Directory.Build.props`; individual project files carry only what is
+specific to them. Warnings are errors everywhere, with .NET analysers at `Recommended`.
+
+Two conventions worth stating, since neither is the tooling default:
+
+- **Compact early returns are kept.** `if (depth <= 0) return 1;` stays on one line; braces appear
+  as soon as the body wraps (`csharp_prefer_braces = when_multiline`).
+- **One type per file, where the type is one you would go looking for.** Tightly-coupled
+  satellites stay with their owner: `Undo` and the `InlineArray` wrappers live in `Position.cs`,
+  `MoveFlags` lives in `Move.cs`, and `Types.cs` holds the shared vocabulary enums. Splitting
+  those into one file each would cost clarity rather than add it.
+
 ## Roadmap
 
 Roughly in the order that buys the most strength per unit of risk.

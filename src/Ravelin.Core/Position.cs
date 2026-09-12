@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -199,7 +200,9 @@ public struct Position
         if ((PiecesOf(Color.White, PieceType.Pawn) | PiecesOf(Color.Black, PieceType.Pawn)
              | PiecesOf(Color.White, PieceType.Rook) | PiecesOf(Color.Black, PieceType.Rook)
              | PiecesOf(Color.White, PieceType.Queen) | PiecesOf(Color.Black, PieceType.Queen)) != 0)
+        {
             return false;
+        }
 
         ulong knights = PiecesOf(Color.White, PieceType.Knight) | PiecesOf(Color.Black, PieceType.Knight);
         ulong bishops = PiecesOf(Color.White, PieceType.Bishop) | PiecesOf(Color.Black, PieceType.Bishop);
@@ -434,8 +437,9 @@ public struct Position
         }
 
         position.EnPassantSquare = Squares.Parse(fields[3]);
-        position.HalfmoveClock = fields.Length > 4 ? int.Parse(fields[4]) : 0;
-        position.FullmoveNumber = fields.Length > 5 ? int.Parse(fields[5]) : 1;
+        // FEN is a machine format: the counters must parse the same way under every locale.
+        position.HalfmoveClock = fields.Length > 4 ? int.Parse(fields[4], CultureInfo.InvariantCulture) : 0;
+        position.FullmoveNumber = fields.Length > 5 ? int.Parse(fields[5], CultureInfo.InvariantCulture) : 1;
 
         position.Key = position.ComputeKey();
 

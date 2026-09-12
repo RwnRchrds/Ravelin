@@ -36,7 +36,8 @@ public readonly struct Move : IEquatable<Move>
 {
     private readonly ushort _value;
 
-    public static readonly Move Null = default;
+    /// <summary>The absence of a move, reported over UCI as "0000".</summary>
+    public static Move Null => default;
 
     public Move(int from, int to, int flags)
     {
