@@ -1,0 +1,27 @@
+name: Deep perft
+
+# The correctness gate for move generation. Counting several billion nodes is
+# too slow for every push, so it runs nightly and on demand. Trigger it by hand
+# after any change to move generation, make/unmake or the attack tables.
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  perft:
+    name: Deep perft
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # No --no-build: the DeepPerft property changes which runsettings file
+      # applies, so the test project has to be evaluated with it set.
+      - name: Run deep perft suite
+        run: dotnet test --configuration Release -p:DeepPerft=true

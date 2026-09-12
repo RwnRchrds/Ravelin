@@ -6,6 +6,11 @@
   A UCI chess engine written in C# for .NET 10.
 </p>
 
+<p align="center">
+  <a href="https://github.com/RwnRchrds/Ravelin/actions/workflows/ci.yml"><img src="https://github.com/RwnRchrds/Ravelin/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/RwnRchrds/Ravelin/actions/workflows/deep-perft.yml"><img src="https://github.com/RwnRchrds/Ravelin/actions/workflows/deep-perft.yml/badge.svg" alt="Deep perft"></a>
+</p>
+
 ---
 
 Ravelin is built correctness-first: move generation is validated against the standard perft
@@ -119,7 +124,9 @@ The deep perft runs are marked `[Trait("Category", "Slow")]` and excluded by def
 A command-line `--filter` will not work here: VSTest ANDs it with the runsettings filter rather
 than replacing it.
 
-Run the deep suite after any change to move generation, make/unmake or the attack tables.
+Run the deep suite after any change to move generation, make/unmake or the attack tables. In CI it
+runs nightly and on demand via the **Deep perft** workflow; the fast suite runs on every push and
+pull request against Linux and Windows.
 
 ### Perft reference values
 
