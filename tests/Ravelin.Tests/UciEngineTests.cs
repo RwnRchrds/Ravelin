@@ -20,8 +20,13 @@ public class UciEngineTests
         return output();
     }
 
+    // The carriage return has to come off before empty lines are filtered: on Windows the writer
+    // emits CRLF, so a blank line splits to "\r", which is not empty and would survive the filter.
     private static string[] Lines(string output) =>
-        output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.TrimEnd('\r')).ToArray();
+        output.Split('\n')
+            .Select(line => line.TrimEnd('\r'))
+            .Where(line => line.Length > 0)
+            .ToArray();
 
     [Fact]
     public void UciCommandIdentifiesTheEngine()
@@ -219,6 +224,25 @@ public class UciEngineTests
         Assert.Equal(20, divide.Length);
         Assert.Contains("e2e4: 600", divide);
         Assert.Equal(8902, divide.Sum(l => long.Parse(l.Split(':')[1])));
+    }
+
+    /// <summary>
+    /// On Windows the writer emits CRLF. Forcing that here reproduces a platform-specific parsing
+    /// bug without needing a Windows runner: splitting on '\n' leaves a stray "\r" for the blank
+    /// separator line, which then survives an empty-entry filter.
+    /// </summary>
+    [Fact]
+    public void GoPerftOutputParsesWithWindowsLineEndings()
+    {
+        var writer = new StringWriter { NewLine = "\r\n" };
+        using var engine = new UciEngine(writer);
+        engine.Execute("position startpos");
+
+        engine.Execute("go perft 3");
+
+        string[] lines = Lines(writer.ToString());
+        Assert.Equal("Nodes searched: 8902", lines[^1]);
+        Assert.Equal(20, lines[..^1].Length);
     }
 
     [Fact]
