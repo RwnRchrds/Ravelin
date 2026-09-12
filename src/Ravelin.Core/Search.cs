@@ -26,6 +26,12 @@ public sealed class Search
     /// <summary>Milliseconds held back so the reply still arrives before the flag falls.</summary>
     private const int MoveOverheadMs = 50;
 
+    /// <summary>Shallowest depth worth attempting a null move at; below this the saving is noise.</summary>
+    private const int NullMoveMinDepth = 3;
+
+    /// <summary>Base plies taken off the null move search, before the depth-scaled part.</summary>
+    private const int NullMoveBaseReduction = 2;
+
     // Move ordering bands. Captures and promotions come first because they change material, then
     // the killers, then everything else.
     private const int CaptureScore = 1_000_000;
@@ -144,7 +150,7 @@ public sealed class Search
         for (int depth = 1; depth <= maxDepth; depth++)
         {
             _followPv = true;
-            int score = Negamax(depth, -Infinity, Infinity, 0);
+            int score = Negamax(depth, -Infinity, Infinity, 0, allowNull: true);
 
             // An aborted iteration has a half-searched root, so its result is discarded.
             if (_aborted) break;
@@ -168,7 +174,11 @@ public sealed class Search
 
     // ---- Core search -----------------------------------------------------
 
-    private int Negamax(int depth, int alpha, int beta, int ply)
+    /// <param name="allowNull">
+    /// False directly under a null move. Two passes in a row are the same position two plies on
+    /// with nothing learned, and they compound into large bogus reductions.
+    /// </param>
+    private int Negamax(int depth, int alpha, int beta, int ply, bool allowNull)
     {
         if (_aborted) return DrawScore;
 
@@ -214,6 +224,37 @@ public sealed class Search
             }
         }
 
+        // Null move pruning. Hand the opponent a free move and search shallow: if the position is
+        // still good enough to beat beta even after giving a move away, it is good enough to prune
+        // without searching properly. Skipped in check, where passing is not even notionally
+        // available, and skipped without pieces, where zugzwang makes passing the better option and
+        // the whole assumption inverts.
+        if (allowNull
+            && ply > 0
+            && depth >= NullMoveMinDepth
+            && !inCheck
+            && _position.HasNonPawnMaterial(_position.SideToMove))
+        {
+            int reduction = NullMoveBaseReduction + (depth / 6);
+
+            Undo nullUndo = _position.MakeNullMove();
+            PushRepetition(_position.Key);
+
+            int nullScore = -Negamax(depth - 1 - reduction, -beta, -beta + 1, ply + 1, allowNull: false);
+
+            _repetitionCount--;
+            _position.UnmakeNullMove(nullUndo);
+
+            if (_aborted) return DrawScore;
+
+            if (nullScore >= beta)
+            {
+                // A mate proved by passing is not a mate: the side to move never actually moved.
+                // Returning beta keeps the cutoff without claiming a forced mate that is not there.
+                return nullScore >= MateThreshold ? beta : nullScore;
+            }
+        }
+
         Span<Move> moves = stackalloc Move[MoveGenerator.MaxMoves];
         int count = MoveGenerator.GenerateLegalMoves(ref _position, moves);
 
@@ -233,7 +274,7 @@ public sealed class Search
             Undo undo = _position.MakeMove(move);
             PushRepetition(_position.Key);
 
-            int score = -Negamax(depth - 1, -beta, -alpha, ply + 1);
+            int score = -Negamax(depth - 1, -beta, -alpha, ply + 1, allowNull: true);
 
             _repetitionCount--;
             _position.UnmakeMove(move, undo);

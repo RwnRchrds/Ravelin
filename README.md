@@ -24,7 +24,8 @@ Ravelin plays complete, legal games and finds tactics several plies deep. It sco
 Stockfish capped at 2100 Elo (+73 +/- 67 over 120 games at 5+0.05), having been level with the same
 opponent capped at 1800 before the transposition table and move ordering landed. It is still an
 early engine: move generation uses ray-walked sliders rather than magic bitboards, the evaluation
-is material plus piece-square tables, and the search does no pruning beyond alpha-beta.
+is material plus piece-square tables, and the only pruning is null move. The 2100 anchor below
+predates a further +122, so it understates the current strength.
 
 Treat the figure as a rough bearing rather than a rating. Stockfish's `UCI_Elo` is not calibrated
 against FIDE or CCRL, 120 games carries an error bar of roughly +/- 60, and full-strength Stockfish
@@ -37,13 +38,14 @@ would still win every game.
 - Zobrist hashing with incremental updates, validated against a full recompute at every node
 - Draw detection: repetition, the fifty-move rule, and insufficient material
 - Iterative-deepening alpha-beta with quiescence search, MVV-LVA ordering, killers and history
+- Null move pruning, with a zugzwang guard that excludes king and pawn endings
 - Evaluation from material and piece-square tables, with a tapered king table
 - Transposition table with depth-preferred replacement and a configurable `Hash` size
 - UCI protocol with a background search thread, so `stop` and `isready` work while thinking
 
 **Not yet**
 
-- Magic bitboards, null-move pruning, late move reductions, futility pruning
+- Magic bitboards, late move reductions, futility pruning
 - Pondering, `MultiPV`, opening book, endgame tablebases
 
 ## Requirements
@@ -272,9 +274,9 @@ Two conventions worth stating, since neither is the tooling default:
 Measure every change with `tools/match.sh` rather than assuming it helped. Roughly in the order
 that buys the most strength per unit of risk:
 
-1. **Pruning**: null-move, late move reductions, futility
-2. **Magic bitboards** for slider attacks, with the perft suite guarding the swap
-3. **Evaluation**: tapered across all piece types, pawn structure, king safety, mobility
+1. **Late move reductions**, then futility pruning
+2. **Evaluation**: tapered across all piece types, pawn structure, king safety, mobility
+3. **Magic bitboards** for slider attacks, with the perft suite guarding the swap
 4. **Aspiration windows** and principal variation search around the iterative deepening loop
 
 Done, with the measurement that justified each:
@@ -283,6 +285,7 @@ Done, with the measurement that justified each:
 | --- | --- | --- |
 | Transposition table | +144 +/- 28 | 532 |
 | Move ordering (killers and history together) | +102 +/- 23 | 648 |
+| Null move pruning | +122 +/- 25 | 580 |
 
 Anchored against capped Stockfish before and after that work:
 

@@ -337,6 +337,54 @@ public struct Position
         return undo;
     }
 
+    /// <summary>
+    /// Passes the turn without moving anything. Illegal in chess, but useful in search: if a
+    /// position is still winning after handing the opponent a free move, it is winning enough to
+    /// prune. Never call this while in check, where passing is not even notionally available.
+    /// </summary>
+    public Undo MakeNullMove()
+    {
+        Color us = SideToMove;
+        var undo = new Undo(Piece.None, Castling, EnPassantSquare, HalfmoveClock, Key);
+
+        // The en passant square belongs to the move that created it and does not survive a pass.
+        Key ^= EnPassantKey();
+        EnPassantSquare = Squares.None;
+
+        HalfmoveClock++;
+        if (us == Color.Black) FullmoveNumber++;
+
+        SideToMove = us.Opponent();
+        Key ^= Zobrist.BlackToMove;
+
+        // With no en passant square there is no contribution to add back.
+        return undo;
+    }
+
+    /// <summary>Reverts <see cref="MakeNullMove"/>.</summary>
+    public void UnmakeNullMove(Undo undo)
+    {
+        Color us = SideToMove.Opponent();
+        SideToMove = us;
+        if (us == Color.Black) FullmoveNumber--;
+
+        Castling = undo.Castling;
+        EnPassantSquare = undo.EnPassantSquare;
+        HalfmoveClock = undo.HalfmoveClock;
+        Key = undo.Key;
+    }
+
+    /// <summary>
+    /// True when the side has a piece other than pawns and the king. Null move pruning relies on
+    /// passing being worse than moving, which fails in zugzwang; king and pawn endings are where
+    /// that bites, so they are excluded by this test.
+    /// </summary>
+    public readonly bool HasNonPawnMaterial(Color color) =>
+        (PiecesOf(color, PieceType.Knight)
+         | PiecesOf(color, PieceType.Bishop)
+         | PiecesOf(color, PieceType.Rook)
+         | PiecesOf(color, PieceType.Queen)) != 0;
+
     /// <summary>Reverts the move applied by <see cref="MakeMove"/>, given the <see cref="Undo"/> it returned.</summary>
     public void UnmakeMove(Move move, Undo undo)
     {
