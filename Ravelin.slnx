@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Ravelin.Core/Ravelin.Core.csproj" />
+    <Project Path="src/Ravelin.Uci/Ravelin.Uci.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Ravelin.Tests/Ravelin.Tests.csproj" />
+  </Folder>
+</Solution>

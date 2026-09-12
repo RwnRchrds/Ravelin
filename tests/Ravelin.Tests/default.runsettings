@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <RunConfiguration>
+    <!--
+      Keeps a plain `dotnet test` fast by leaving the deep perft runs opt-in.
+      This file is only applied when the DeepPerft property is unset, so:
+
+        dotnet test                                   fast gate only
+        dotnet test -c Release -p:DeepPerft=true      fast gate plus the deep perft runs
+
+      See Ravelin.Tests.csproj for the conditional that wires this up.
+    -->
+    <TestCaseFilter>Category!=Slow</TestCaseFilter>
+  </RunConfiguration>
+</RunSettings>
