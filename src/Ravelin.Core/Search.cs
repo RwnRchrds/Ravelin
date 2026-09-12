@@ -33,6 +33,13 @@ public sealed class Search
     private const int PrimaryKillerScore = 800_000;
     private const int SecondaryKillerScore = 790_000;
 
+    /// <summary>
+    /// History scores are capped below the killer band so a well-established quiet move can never
+    /// displace a killer. Exceeding it halves the whole table rather than clipping one entry,
+    /// which keeps the relative ordering intact.
+    /// </summary>
+    private const int HistoryCeiling = SecondaryKillerScore - 1;
+
     private readonly Move[][] _pv = CreatePvTable();
     private readonly int[] _pvLength = new int[MaxPly];
     private readonly Move[] _previousPv = new Move[MaxPly];
@@ -43,6 +50,13 @@ public sealed class Search
     /// before the rest of the quiet moves are considered.
     /// </summary>
     private readonly Move[,] _killers = new Move[MaxPly, 2];
+
+    /// <summary>
+    /// How often each [piece, destination] pair has caused a cutoff, credited by depth squared so
+    /// a cutoff found deep in the tree counts for more than a shallow one. Unlike the killers this
+    /// is not tied to a ply, so it carries what has worked across the whole search.
+    /// </summary>
+    private readonly int[,] _history = new int[Pieces.Count, Squares.Count];
     private int _previousPvLength;
     private bool _followPv;
 
@@ -112,6 +126,7 @@ public sealed class Search
 
         // Killers are indexed by ply, so they only mean anything within a single search.
         Array.Clear(_killers);
+        Array.Clear(_history);
         SeedRepetitionHistory(gameHistory, position.Key);
         ComputeTimeBudget();
 
@@ -239,6 +254,7 @@ public sealed class Search
             if (alpha >= beta)
             {
                 RecordKiller(move, ply);
+                RecordHistory(move, depth);
                 break;
             }
         }
@@ -388,12 +404,13 @@ public sealed class Search
     /// </summary>
     private int ScoreMove(Move move, int ply)
     {
-        // A quiet move has no material to judge it by, so the killers are all we have so far.
+        // A quiet move has no material to judge it by: the killers for this ply come first, then
+        // whatever the rest of the search has found to work.
         if (!move.IsCapture && !move.IsPromotion)
         {
             if (move == _killers[ply, 0]) return PrimaryKillerScore;
             if (move == _killers[ply, 1]) return SecondaryKillerScore;
-            return 0;
+            return _history[(int)_position.PieceAt(move.From), move.To];
         }
 
         int score = 0;
@@ -429,6 +446,26 @@ public sealed class Search
         // Keep the previous killer as the second choice rather than discarding it.
         _killers[ply, 1] = _killers[ply, 0];
         _killers[ply, 0] = move;
+    }
+
+    /// <summary>
+    /// Credits a quiet move for causing a cutoff. The bonus grows with the square of the depth,
+    /// because a cutoff near the root settles far more of the tree than one at a leaf.
+    /// </summary>
+    private void RecordHistory(Move move, int depth)
+    {
+        if (move.IsCapture || move.IsPromotion) return;
+
+        int piece = (int)_position.PieceAt(move.From);
+        _history[piece, move.To] += depth * depth;
+
+        if (_history[piece, move.To] < HistoryCeiling) return;
+
+        // Halve everything rather than clamp one entry, so the ordering between moves survives.
+        for (int p = 0; p < Pieces.Count; p++)
+        {
+            for (int square = 0; square < Squares.Count; square++) _history[p, square] /= 2;
+        }
     }
 
     // ---- Principal variation ---------------------------------------------
