@@ -20,12 +20,12 @@ through `cutechess-cli`.
 
 ## Status
 
-Ravelin plays complete, legal games and finds tactics several plies deep. Before the transposition
-table landed it was level with Stockfish capped at 1800 Elo (49.6% over 120 games at 5+0.05), and
-the table itself was worth +144 Elo +/- 28 over 532 games, so the current figure is somewhat above
-that and not yet re-anchored. It is still an early engine: move generation uses ray-walked sliders
-rather than magic bitboards, the evaluation is material plus piece-square tables, and the search
-has no killer, history or pruning heuristics.
+Ravelin plays complete, legal games and finds tactics several plies deep. It was level with
+Stockfish capped at 1800 Elo before the transposition table landed (49.6% over 120 games at
+5+0.05); the table was then worth +144 Elo +/- 28, and move ordering a further +102 +/- 23. The
+current strength is well above that anchor and has not been re-measured. It is still an early
+engine: move generation uses ray-walked sliders rather than magic bitboards, the evaluation is
+material plus piece-square tables, and the search does no pruning beyond alpha-beta.
 
 **Working today**
 
@@ -33,14 +33,14 @@ has no killer, history or pruning heuristics.
 - Legal move generation covering castling, en passant and promotion — perft-verified to 3.2 billion nodes
 - Zobrist hashing with incremental updates, validated against a full recompute at every node
 - Draw detection: repetition, the fifty-move rule, and insufficient material
-- Iterative-deepening alpha-beta with quiescence search and MVV-LVA move ordering
+- Iterative-deepening alpha-beta with quiescence search, MVV-LVA ordering, killers and history
 - Evaluation from material and piece-square tables, with a tapered king table
 - Transposition table with depth-preferred replacement and a configurable `Hash` size
 - UCI protocol with a background search thread, so `stop` and `isready` work while thinking
 
 **Not yet**
 
-- Magic bitboards, killer/history heuristics, null-move pruning, late move reductions
+- Magic bitboards, null-move pruning, late move reductions, futility pruning
 - Pondering, `MultiPV`, opening book, endgame tablebases
 
 ## Requirements
@@ -269,13 +269,23 @@ Two conventions worth stating, since neither is the tooling default:
 Measure every change with `tools/match.sh` rather than assuming it helped. Roughly in the order
 that buys the most strength per unit of risk:
 
-1. **Move ordering**: killer moves, history heuristic
-2. **Pruning**: null-move, late move reductions, futility
-3. **Magic bitboards** for slider attacks, with the perft suite guarding the swap
-4. **Evaluation**: tapered across all piece types, pawn structure, king safety, mobility
-5. **Aspiration windows** and principal variation search around the iterative deepening loop
+1. **Pruning**: null-move, late move reductions, futility
+2. **Magic bitboards** for slider attacks, with the perft suite guarding the swap
+3. **Evaluation**: tapered across all piece types, pawn structure, king safety, mobility
+4. **Aspiration windows** and principal variation search around the iterative deepening loop
 
-Done: transposition table (+144 Elo +/- 28).
+Done, with the measurement that justified each:
+
+| Change | Elo | Games |
+| --- | --- | --- |
+| Transposition table | +144 +/- 28 | 532 |
+| Move ordering (killers and history together) | +102 +/- 23 | 648 |
+
+Measured individually against the commit before them, killers came out at +23 +/- 25 and history
+at +16 +/- 21, neither conclusive. Measured together against the transposition table alone the pair
+is worth +102, which says those two runs were underpowered rather than that the changes were
+marginal. Worth remembering when a small change looks like it did nothing: 600 games at a fast time
+control cannot resolve an effect this size.
 
 ## Licence
 
