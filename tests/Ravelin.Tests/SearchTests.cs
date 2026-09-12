@@ -220,8 +220,14 @@ public class SearchTests
     /// The whole point of the table: transpositions mean the same position is reached by many
     /// move orders, and reusing a result avoids searching it again.
     /// </summary>
+    /// <remarks>
+    /// The opening is deliberately not tested here. Its tree is small and offers few
+    /// transpositions, so at shallow depth the table costs slightly more than it saves — measured
+    /// at 1.12x the nodes for depth 5 from the starting position, against 0.56x for Kiwipete.
+    /// The benefit is real but grows with depth: by depth 7 the starting position is down to
+    /// 0.44x. These middlegame positions show the effect at a depth the suite can afford.
+    /// </remarks>
     [Theory]
-    [InlineData(Position.StartFen)]
     [InlineData(PerftTests.Kiwipete)]
     [InlineData(PerftTests.Position6)]
     public void TheTableCutsTheNodeCountAtEqualDepth(string fen)

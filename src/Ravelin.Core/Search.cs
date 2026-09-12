@@ -26,9 +26,23 @@ public sealed class Search
     /// <summary>Milliseconds held back so the reply still arrives before the flag falls.</summary>
     private const int MoveOverheadMs = 50;
 
+    // Move ordering bands. Captures and promotions come first because they change material, then
+    // the killers, then everything else.
+    private const int CaptureScore = 1_000_000;
+    private const int PromotionScore = 900_000;
+    private const int PrimaryKillerScore = 800_000;
+    private const int SecondaryKillerScore = 790_000;
+
     private readonly Move[][] _pv = CreatePvTable();
     private readonly int[] _pvLength = new int[MaxPly];
     private readonly Move[] _previousPv = new Move[MaxPly];
+
+    /// <summary>
+    /// Two quiet moves per ply that most recently caused a beta cutoff there. A refutation that
+    /// worked in one line usually works in its siblings, so trying them early earns cutoffs
+    /// before the rest of the quiet moves are considered.
+    /// </summary>
+    private readonly Move[,] _killers = new Move[MaxPly, 2];
     private int _previousPvLength;
     private bool _followPv;
 
@@ -95,6 +109,9 @@ public sealed class Search
         _stopwatch.Restart();
 
         _table?.NewSearch();
+
+        // Killers are indexed by ply, so they only mean anything within a single search.
+        Array.Clear(_killers);
         SeedRepetitionHistory(gameHistory, position.Key);
         ComputeTimeBudget();
 
@@ -219,7 +236,11 @@ public sealed class Search
             }
 
             // The opponent already has a better option earlier in the tree, so this node is moot.
-            if (alpha >= beta) break;
+            if (alpha >= beta)
+            {
+                RecordKiller(move, ply);
+                break;
+            }
         }
 
         // Which side of the window the result fell on is what makes the score reusable later.
@@ -337,7 +358,7 @@ public sealed class Search
             }
             else
             {
-                scores[i] = ScoreMove(moves[i]);
+                scores[i] = ScoreMove(moves[i], ply);
             }
         }
 
@@ -365,8 +386,16 @@ public sealed class Search
     /// MVV-LVA: capturing a valuable piece with a cheap one is the most promising thing to try,
     /// so the victim dominates the score and the attacker breaks ties in reverse.
     /// </summary>
-    private int ScoreMove(Move move)
+    private int ScoreMove(Move move, int ply)
     {
+        // A quiet move has no material to judge it by, so the killers are all we have so far.
+        if (!move.IsCapture && !move.IsPromotion)
+        {
+            if (move == _killers[ply, 0]) return PrimaryKillerScore;
+            if (move == _killers[ply, 1]) return SecondaryKillerScore;
+            return 0;
+        }
+
         int score = 0;
 
         if (move.IsCapture)
@@ -378,14 +407,28 @@ public sealed class Search
 
             PieceType attacker = Pieces.TypeOf(_position.PieceAt(move.From));
 
-            score += 1_000_000
-                     + Evaluation.PieceValues[(int)victim] * 16
+            score += CaptureScore
+                     + (Evaluation.PieceValues[(int)victim] * 16)
                      - Evaluation.PieceValues[(int)attacker];
         }
 
-        if (move.IsPromotion) score += 900_000 + Evaluation.PieceValues[(int)move.PromotionPiece];
+        if (move.IsPromotion) score += PromotionScore + Evaluation.PieceValues[(int)move.PromotionPiece];
 
         return score;
+    }
+
+    /// <summary>
+    /// Remembers a quiet move that caused a cutoff. Captures are excluded: they are already
+    /// ordered ahead of the killers by MVV-LVA, so recording them would waste both slots.
+    /// </summary>
+    private void RecordKiller(Move move, int ply)
+    {
+        if (move.IsCapture || move.IsPromotion) return;
+        if (move == _killers[ply, 0]) return;
+
+        // Keep the previous killer as the second choice rather than discarding it.
+        _killers[ply, 1] = _killers[ply, 0];
+        _killers[ply, 0] = move;
     }
 
     // ---- Principal variation ---------------------------------------------
