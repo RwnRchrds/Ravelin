@@ -175,13 +175,3 @@ dotnet_naming_style.pascal_case.capitalization = pascal_case
 dotnet_naming_style.camel_case.capitalization = camel_case
 dotnet_naming_style.underscore_camel_case.capitalization = camel_case
 dotnet_naming_style.underscore_camel_case.required_prefix = _
-
-[src/Ravelin.Core/Position.cs]
-# CA1051: Do not declare visible instance fields.
-#
-# Deliberately suppressed here. Position is a performance-critical value type whose state is read
-# and written directly by move generation, search and evaluation, and the InlineArray members have
-# to be reachable by reference. Wrapping them in properties would add indirection on the hottest
-# path in the engine for no benefit. The same applies to the readonly fields on Undo.
-# Everywhere else in the codebase the rule stays on.
-dotnet_diagnostic.CA1051.severity = none

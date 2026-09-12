@@ -200,6 +200,44 @@ Claiming an actual threefold draw in a game is the GUI's job, not the engine's.
 **Slider attacks are walked ray by ray.** `Attacks.Bishop` and `Attacks.Rook` are the seam where
 magic bitboards will drop in later without any caller changing.
 
+## Measuring strength
+
+Ravelin is deterministic: from a given position it always plays the same move. Two builds left to
+their own devices would therefore play one identical game and tell you nothing, so every match runs
+from an opening book, with each opening played twice so both engines get each colour.
+
+One-time setup per checkout — fetches the `fastchess` match runner and the book, neither of which
+is committed:
+
+```bash
+tools/setup.sh
+```
+
+**Comparing two versions** is the one that matters day to day. It builds both sides (a git ref goes
+into a temporary worktree) and runs an SPRT, which stops as soon as the result is statistically
+settled rather than after a fixed number of games:
+
+```bash
+tools/match.sh                            # working tree vs HEAD
+tools/match.sh --baseline v0.2.0          # working tree vs a tag
+tools/match.sh --baseline HEAD~1 --rounds 200 --tc 5+0.05
+tools/match.sh --no-sprt --rounds 100     # fixed length instead
+```
+
+Run this for every change meant to gain strength. An A/A run — identical engines — should report
+0.00 Elo with every opening pair split, which is also the quickest way to confirm the harness
+itself is honest.
+
+**Anchoring against an absolute rating** uses Stockfish with its strength capped. Full-strength
+Stockfish wins every game and measures nothing; cap it near Ravelin's level and raise it as Ravelin
+improves:
+
+```bash
+tools/vs-stockfish.sh --elo 1800 --rounds 100
+```
+
+Results land in `tools/results/` as PGN, which is gitignored.
+
 ## Code style
 
 `.editorconfig` is the source of truth, applied by IDEs, by `dotnet format`, and by the build

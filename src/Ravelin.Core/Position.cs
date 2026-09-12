@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -29,6 +30,12 @@ public struct MailboxArray
 /// State captured before a move is made, so <see cref="Position.UnmakeMove"/> can restore what
 /// the move itself does not encode.
 /// </summary>
+[SuppressMessage(
+    "Design",
+    "CA1051:Do not declare visible instance fields",
+    Justification =
+        "Undo is a plain record of state restored on the search's hot path. Readonly fields make " +
+        "that intent explicit and avoid property indirection per unmake.")]
 public readonly struct Undo(Piece captured, CastlingRights castling, int enPassantSquare, int halfmoveClock, ulong key)
 {
     public readonly Piece Captured = captured;
@@ -49,6 +56,13 @@ public readonly struct Undo(Piece captured, CastlingRights castling, int enPassa
 /// Pass it by <c>ref</c> in search and perft; copying it by value is legal (all state is inline,
 /// no shared references) but wasteful in hot loops.
 /// </summary>
+[SuppressMessage(
+    "Design",
+    "CA1051:Do not declare visible instance fields",
+    Justification =
+        "Position is the engine's hottest value type. Move generation, search and evaluation read " +
+        "and write this state directly, and the InlineArray members have to be reachable by " +
+        "reference, which properties would prevent. The public fields are deliberate.")]
 public struct Position
 {
     public const string StartFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
