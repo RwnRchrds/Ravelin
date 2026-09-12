@@ -20,12 +20,15 @@ through `cutechess-cli`.
 
 ## Status
 
-Ravelin plays complete, legal games and finds tactics several plies deep. It was level with
-Stockfish capped at 1800 Elo before the transposition table landed (49.6% over 120 games at
-5+0.05); the table was then worth +144 Elo +/- 28, and move ordering a further +102 +/- 23. The
-current strength is well above that anchor and has not been re-measured. It is still an early
-engine: move generation uses ray-walked sliders rather than magic bitboards, the evaluation is
-material plus piece-square tables, and the search does no pruning beyond alpha-beta.
+Ravelin plays complete, legal games and finds tactics several plies deep. It scores 60.4% against
+Stockfish capped at 2100 Elo (+73 +/- 67 over 120 games at 5+0.05), having been level with the same
+opponent capped at 1800 before the transposition table and move ordering landed. It is still an
+early engine: move generation uses ray-walked sliders rather than magic bitboards, the evaluation
+is material plus piece-square tables, and the search does no pruning beyond alpha-beta.
+
+Treat the figure as a rough bearing rather than a rating. Stockfish's `UCI_Elo` is not calibrated
+against FIDE or CCRL, 120 games carries an error bar of roughly +/- 60, and full-strength Stockfish
+would still win every game.
 
 **Working today**
 
@@ -280,6 +283,18 @@ Done, with the measurement that justified each:
 | --- | --- | --- |
 | Transposition table | +144 +/- 28 | 532 |
 | Move ordering (killers and history together) | +102 +/- 23 | 648 |
+
+Anchored against capped Stockfish before and after that work:
+
+| Opponent | Score | Elo |
+| --- | --- | --- |
+| Stockfish-1800, before both changes | 49.6% over 120 | -3 +/- 56 |
+| Stockfish-2100, after both changes | 60.4% over 120 | +73 +/- 67 |
+
+The anchors imply a larger gain than the two self-play matches measured, which is what the error
+bars allow rather than a contradiction: the uncertainty on the difference between two 120-game
+anchors is itself around +/- 87, and `UCI_Elo` steps are not guaranteed to be linear. Raise the cap
+again before the next anchor, or it stops being a measuring stick.
 
 Measured individually against the commit before them, killers came out at +23 +/- 25 and history
 at +16 +/- 21, neither conclusive. Measured together against the transposition table alone the pair
