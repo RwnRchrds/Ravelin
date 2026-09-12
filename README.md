@@ -20,10 +20,12 @@ through `cutechess-cli`.
 
 ## Status
 
-Ravelin plays complete, legal games and finds tactics a few plies deep. It is not yet a strong
-engine — there is no transposition table, move generation uses ray-walked sliders rather than
-magic bitboards, and the evaluation is material plus piece-square tables. Playing strength has
-not been measured against a rated opponent.
+Ravelin plays complete, legal games and finds tactics several plies deep. Before the transposition
+table landed it was level with Stockfish capped at 1800 Elo (49.6% over 120 games at 5+0.05), and
+the table itself was worth +144 Elo +/- 28 over 532 games, so the current figure is somewhat above
+that and not yet re-anchored. It is still an early engine: move generation uses ray-walked sliders
+rather than magic bitboards, the evaluation is material plus piece-square tables, and the search
+has no killer, history or pruning heuristics.
 
 **Working today**
 
@@ -33,12 +35,13 @@ not been measured against a rated opponent.
 - Draw detection: repetition, the fifty-move rule, and insufficient material
 - Iterative-deepening alpha-beta with quiescence search and MVV-LVA move ordering
 - Evaluation from material and piece-square tables, with a tapered king table
+- Transposition table with depth-preferred replacement and a configurable `Hash` size
 - UCI protocol with a background search thread, so `stop` and `isready` work while thinking
 
 **Not yet**
 
-- Transposition table, magic bitboards, killer/history heuristics, null-move pruning
-- Pondering, `MultiPV`, configurable options, opening book, endgame tablebases
+- Magic bitboards, killer/history heuristics, null-move pruning, late move reductions
+- Pondering, `MultiPV`, opening book, endgame tablebases
 
 ## Requirements
 
@@ -263,14 +266,16 @@ Two conventions worth stating, since neither is the tooling default:
 
 ## Roadmap
 
-Roughly in the order that buys the most strength per unit of risk.
+Measure every change with `tools/match.sh` rather than assuming it helped. Roughly in the order
+that buys the most strength per unit of risk:
 
-1. **Transposition table** — the Zobrist plumbing is already in place
-2. **Magic bitboards** for slider attacks, with the perft suite guarding the swap
-3. **Move ordering**: killer moves, history heuristic
-4. **Pruning**: null-move, late move reductions, futility
-5. **Evaluation**: tapered across all piece types, pawn structure, king safety, mobility
-6. Measure it — a fixed opponent and a few hundred games per change, rather than guessing
+1. **Move ordering**: killer moves, history heuristic
+2. **Pruning**: null-move, late move reductions, futility
+3. **Magic bitboards** for slider attacks, with the perft suite guarding the swap
+4. **Evaluation**: tapered across all piece types, pawn structure, king safety, mobility
+5. **Aspiration windows** and principal variation search around the iterative deepening loop
+
+Done: transposition table (+144 Elo +/- 28).
 
 ## Licence
 

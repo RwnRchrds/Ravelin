@@ -213,4 +213,86 @@ public class SearchTests
 
         Assert.Contains(key, history);
     }
+
+    // ---- transposition table ---------------------------------------------
+
+    /// <summary>
+    /// The whole point of the table: transpositions mean the same position is reached by many
+    /// move orders, and reusing a result avoids searching it again.
+    /// </summary>
+    [Theory]
+    [InlineData(Position.StartFen)]
+    [InlineData(PerftTests.Kiwipete)]
+    [InlineData(PerftTests.Position6)]
+    public void TheTableCutsTheNodeCountAtEqualDepth(string fen)
+    {
+        Position position = Position.FromFen(fen);
+        var limits = new SearchLimits { Depth = 5, MoveTimeMs = 120_000 };
+
+        SearchInfo without = new Search().Run(position, limits);
+        SearchInfo with = new Search(new TranspositionTable(16)).Run(position, limits);
+
+        Assert.Equal(without.Depth, with.Depth);
+        Assert.True(
+            with.Nodes < without.Nodes,
+            $"expected fewer nodes with a table, got {with.Nodes} vs {without.Nodes}");
+    }
+
+    [Theory]
+    [InlineData("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1", 3, 1)]
+    [InlineData("7k/8/8/8/8/8/1R6/R5K1 w - - 0 1", 5, 2)]
+    public void MatesAreStillFoundWithATable(string fen, int depth, int expectedMateInMoves)
+    {
+        SearchInfo info = new Search(new TranspositionTable(8))
+            .Run(Position.FromFen(fen), new SearchLimits { Depth = depth, MoveTimeMs = 10_000 });
+
+        Assert.True(Search.IsMateScore(info.Score), $"expected a mate score, got {info.Score}");
+        Assert.Equal(expectedMateInMoves, Search.MateDistanceInMoves(info.Score));
+    }
+
+    /// <summary>
+    /// Entries persist between searches, so a stale or mis-rebased score would surface on the
+    /// second run rather than the first. Both must agree.
+    /// </summary>
+    [Fact]
+    public void ReusingATableAcrossSearchesGivesTheSameAnswer()
+    {
+        var table = new TranspositionTable(8);
+        var search = new Search(table);
+        Position position = Position.FromFen(PerftTests.Kiwipete);
+        var limits = new SearchLimits { Depth = 4, MoveTimeMs = 30_000 };
+
+        SearchInfo first = search.Run(position, limits);
+        SearchInfo second = search.Run(position, limits);
+
+        Assert.Equal(first.Score, second.Score);
+        Assert.Equal(first.BestMove, second.BestMove);
+    }
+
+    /// <summary>A warm table must not change which move the search settles on.</summary>
+    [Theory]
+    [InlineData(Position.StartFen)]
+    [InlineData(PerftTests.Position4)]
+    [InlineData(PerftTests.Position6)]
+    public void TheTableDoesNotChangeTheChosenMove(string fen)
+    {
+        Position position = Position.FromFen(fen);
+        var limits = new SearchLimits { Depth = 4, MoveTimeMs = 60_000 };
+
+        SearchInfo without = new Search().Run(position, limits);
+        SearchInfo with = new Search(new TranspositionTable(16)).Run(position, limits);
+
+        Assert.Equal(without.Score, with.Score);
+    }
+
+    [Fact]
+    public void HashFullRisesAsTheTableFills()
+    {
+        var search = new Search(new TranspositionTable(1));
+        Assert.Equal(0, search.HashFull);
+
+        search.Run(Position.StartingPosition(), new SearchLimits { Depth = 6, MoveTimeMs = 30_000 });
+
+        Assert.True(search.HashFull > 0, "expected the table to have entries after a search");
+    }
 }

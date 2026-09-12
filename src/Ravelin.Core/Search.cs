@@ -36,6 +36,7 @@ public sealed class Search
     private ulong[] _repetition = new ulong[1024];
     private int _repetitionCount;
 
+    private readonly TranspositionTable? _table;
     private readonly Stopwatch _stopwatch = new();
     private Position _position;
     private SearchLimits _limits = new();
@@ -44,6 +45,14 @@ public sealed class Search
     private bool _aborted;
     private int _softLimitMs;
     private int _hardLimitMs;
+
+    /// <param name="table">
+    /// Shared across searches so results carry between moves. Pass null to search without one.
+    /// </param>
+    public Search(TranspositionTable? table = null) => _table = table;
+
+    /// <summary>Table fill in permille, for UCI's <c>hashfull</c>.</summary>
+    public int HashFull => _table?.PermilleFull() ?? 0;
 
     private static Move[][] CreatePvTable()
     {
@@ -85,6 +94,7 @@ public sealed class Search
         _previousPvLength = 0;
         _stopwatch.Restart();
 
+        _table?.NewSearch();
         SeedRepetitionHistory(gameHistory, position.Key);
         ComputeTimeBudget();
 
@@ -150,6 +160,28 @@ public sealed class Search
             return DrawScore;
         }
 
+        // Transposition probe. The root never takes a cutoff: it has to search its moves to
+        // produce a best move and a principal variation to report.
+        Move tableMove = Move.Null;
+        if (_table is not null && _table.TryProbe(
+                _position.Key, ply, out int storedDepth, out int storedScore, out Bound storedBound, out Move storedMove))
+        {
+            tableMove = storedMove;
+
+            if (ply > 0 && storedDepth >= depth)
+            {
+                bool cutoff = storedBound switch
+                {
+                    Bound.Exact => true,
+                    Bound.Lower => storedScore >= beta,
+                    Bound.Upper => storedScore <= alpha,
+                    _ => false,
+                };
+
+                if (cutoff) return storedScore;
+            }
+        }
+
         Span<Move> moves = stackalloc Move[MoveGenerator.MaxMoves];
         int count = MoveGenerator.GenerateLegalMoves(ref _position, moves);
 
@@ -157,9 +189,11 @@ public sealed class Search
         // shortest mate and the longest defence.
         if (count == 0) return inCheck ? -MateScore + ply : DrawScore;
 
-        OrderMoves(moves[..count], ply);
+        OrderMoves(moves[..count], ply, tableMove);
 
+        int originalAlpha = alpha;
         int best = -Infinity;
+        Move bestMove = Move.Null;
 
         for (int i = 0; i < count; i++)
         {
@@ -176,6 +210,7 @@ public sealed class Search
 
             if (score <= best) continue;
             best = score;
+            bestMove = move;
 
             if (score > alpha)
             {
@@ -186,6 +221,13 @@ public sealed class Search
             // The opponent already has a better option earlier in the tree, so this node is moot.
             if (alpha >= beta) break;
         }
+
+        // Which side of the window the result fell on is what makes the score reusable later.
+        Bound bound = best <= originalAlpha ? Bound.Upper
+            : best >= beta ? Bound.Lower
+            : Bound.Exact;
+
+        _table?.Store(_position.Key, ply, depth, best, bound, bestMove);
 
         return best;
     }
@@ -230,7 +272,7 @@ public sealed class Search
 
         if (!inCheck) count = KeepTacticalMoves(moves, count);
 
-        OrderMoves(moves[..count], ply);
+        OrderMoves(moves[..count], ply, Move.Null);
 
         for (int i = 0; i < count; i++)
         {
@@ -270,7 +312,7 @@ public sealed class Search
     /// Sorts moves so the most likely to cause a cutoff come first, which is what makes alpha-beta
     /// pay: the best move from the previous iteration, then captures by MVV-LVA, then the rest.
     /// </summary>
-    private void OrderMoves(Span<Move> moves, int ply)
+    private void OrderMoves(Span<Move> moves, int ply, Move tableMove)
     {
         Span<int> scores = stackalloc int[moves.Length];
 
@@ -283,9 +325,14 @@ public sealed class Search
         bool foundPreferred = false;
         for (int i = 0; i < moves.Length; i++)
         {
-            if (preferred != Move.Null && moves[i] == preferred)
+            // The table move is the best this position was known to have, so it goes first.
+            if (tableMove != Move.Null && moves[i] == tableMove)
             {
                 scores[i] = int.MaxValue;
+            }
+            else if (preferred != Move.Null && moves[i] == preferred)
+            {
+                scores[i] = int.MaxValue - 1;
                 foundPreferred = true;
             }
             else

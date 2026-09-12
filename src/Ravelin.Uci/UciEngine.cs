@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using Ravelin.Core;
 
 namespace Ravelin.Uci;
@@ -29,7 +30,8 @@ public sealed class UciEngine : IDisposable
 
     private readonly TextWriter _output;
     private readonly Lock _writeLock = new();
-    private readonly Search _search = new();
+    private readonly TranspositionTable _table = new();
+    private readonly Search _search;
 
     /// <summary>Zobrist keys of every position in the game so far, so the search sees repetitions.</summary>
     private readonly List<ulong> _history = [];
@@ -42,6 +44,7 @@ public sealed class UciEngine : IDisposable
     public UciEngine(TextWriter output)
     {
         _output = output;
+        _search = new Search(_table);
         ResetGame(Position.StartingPosition());
     }
 
@@ -86,6 +89,8 @@ public sealed class UciEngine : IDisposable
                 break;
             case "ucinewgame":
                 StopSearch(wait: true);
+                // Entries from the previous game describe positions that will not recur.
+                _table.Clear();
                 ResetGame(Position.StartingPosition());
                 break;
             case "position":
@@ -106,9 +111,12 @@ public sealed class UciEngine : IDisposable
                 StopSearch(wait: true);
                 return false;
 
-            // Accepted and ignored: there is no option set, no registration, and pondering is not
-            // implemented, so a ponderhit is simply a no-op.
             case "setoption":
+                SetOption(args);
+                break;
+
+            // Accepted and ignored: there is nothing to register, and pondering is not
+            // implemented, so a ponderhit is simply a no-op.
             case "register":
             case "ponderhit":
                 break;
@@ -144,7 +152,49 @@ public sealed class UciEngine : IDisposable
     {
         Write($"id name {Name} {Version}");
         Write($"id author {Author}");
+        Write($"option name Hash type spin default {TranspositionTable.DefaultSizeMegabytes} " +
+              $"min {TranspositionTable.MinSizeMegabytes} max {TranspositionTable.MaxSizeMegabytes}");
         Write("uciok");
+    }
+
+    /// <summary>Handles <c>setoption name &lt;id&gt; [value &lt;x&gt;]</c>. Option names may contain spaces.</summary>
+    private void SetOption(ReadOnlySpan<string> args)
+    {
+        int nameAt = -1;
+        int valueAt = -1;
+
+        for (int i = 0; i < args.Length; i++)
+        {
+            if (args[i].Equals("name", StringComparison.OrdinalIgnoreCase)) nameAt = i;
+            else if (args[i].Equals("value", StringComparison.OrdinalIgnoreCase)) valueAt = i;
+        }
+
+        if (nameAt < 0) return;
+
+        int nameEnd = valueAt > nameAt ? valueAt : args.Length;
+        string name = string.Join(' ', args[(nameAt + 1)..nameEnd].ToArray());
+        string value = valueAt >= 0 && valueAt + 1 < args.Length
+            ? string.Join(' ', args[(valueAt + 1)..].ToArray())
+            : string.Empty;
+
+        if (!name.Equals("Hash", StringComparison.OrdinalIgnoreCase))
+        {
+            // GUIs routinely offer options an engine does not have; saying so is debug detail.
+            if (_debug) Write($"info string ignoring unknown option '{name}'");
+            return;
+        }
+
+        if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int megabytes))
+        {
+            Write($"info string Hash needs an integer, got '{value}'");
+            return;
+        }
+
+        // Reallocating the table under a running search would be a data race.
+        StopSearch(wait: true);
+        _table.Resize(megabytes);
+
+        if (_debug) Write($"info string hash {megabytes} MB, {_table.Capacity} entries");
     }
 
     private void ResetGame(Position position)
@@ -319,7 +369,8 @@ public sealed class UciEngine : IDisposable
         string line = string.Join(' ', info.PrincipalVariation);
 
         Write($"info depth {info.Depth} score {score} nodes {info.Nodes} " +
-              $"nps {info.NodesPerSecond} time {(long)info.Elapsed.TotalMilliseconds} pv {line}");
+              $"nps {info.NodesPerSecond} hashfull {_search.HashFull} " +
+              $"time {(long)info.Elapsed.TotalMilliseconds} pv {line}");
     }
 
     private void StopSearch(bool wait)

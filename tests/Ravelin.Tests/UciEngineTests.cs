@@ -310,7 +310,9 @@ public class UciEngineTests
 
         foreach (string line in info)
         {
-            Assert.Matches(@"^info depth \d+ score (cp -?\d+|mate -?\d+) nodes \d+ nps \d+ time \d+ pv \w", line);
+            Assert.Matches(
+                @"^info depth \d+ score (cp -?\d+|mate -?\d+) nodes \d+ nps \d+ hashfull \d+ time \d+ pv \w",
+                line);
         }
     }
 
@@ -409,5 +411,49 @@ public class UciEngineTests
 
         // One bestmove per go, and the engine is left idle rather than still thinking.
         Assert.Equal(2, Lines(output()).Count(l => l.StartsWith("bestmove ", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void UciAdvertisesTheHashOption()
+    {
+        Assert.Contains("option name Hash type spin default 16 min 1 max 4096", Lines(Run("uci")));
+    }
+
+    [Fact]
+    public void SetOptionResizesTheHash()
+    {
+        (UciEngine engine, Func<string> output) = NewEngine();
+        engine.Execute("debug on");
+
+        engine.Execute("setoption name Hash value 32");
+
+        Assert.Contains("info string hash 32 MB", output());
+    }
+
+    [Fact]
+    public void SetOptionRejectsANonNumericHash()
+    {
+        Assert.Contains("Hash needs an integer", Run("setoption name Hash value plenty"));
+    }
+
+    [Fact]
+    public void UnknownOptionsAreIgnoredQuietly()
+    {
+        // Silent by default, since GUIs offer options every engine lacks.
+        Assert.Equal(string.Empty, Run("setoption name Ponder value true"));
+        Assert.Contains("unknown option 'Ponder'", Run("debug on", "setoption name Ponder value true"));
+    }
+
+    [Fact]
+    public void SearchStillWorksAfterResizingTheHash()
+    {
+        (UciEngine engine, Func<string> output) = NewEngine();
+        engine.Execute("setoption name Hash value 1");
+        engine.Execute("position startpos");
+
+        engine.Execute("go depth 4");
+        engine.WaitForSearch();
+
+        Assert.StartsWith("bestmove ", Lines(output())[^1]);
     }
 }
